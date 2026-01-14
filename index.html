@@ -689,7 +689,6 @@
   }
 
   // ---------- Game State ----------
-  const LS_KEY = "bj_realistic_v1";
   const defaultState = {
     bankroll: 2500,
     bet: 0,
@@ -697,7 +696,8 @@
     stats: { rounds:0, win:0, lose:0, push:0, streak:0, bestStreak:0 },
     audioOn: true
   };
-  let state = loadState();
+  let currentUser = null;
+  let state = null;
 
   let shoe = [];
   let player = [];
@@ -706,22 +706,80 @@
   let dealerHoleHidden = true;
   let doubled = false;
 
-  function loadState(){
+  async function apiFetch(path, payload){
+    const options = payload ? {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    } : {};
+    const res = await fetch(path, options);
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){
+      const message = data && data.error ? data.error : "Serverfehler";
+      throw new Error(message);
+    }
+    return data;
+  }
+
+  function normalizeUsername(name){
+    return name.trim();
+  }
+
+  async function ensureSession(){
+    while(true){
+      const nameInput = window.prompt("Benutzername eingeben:");
+      if(nameInput === null) continue;
+      const username = normalizeUsername(nameInput);
+      if(!username){
+        window.alert("Bitte einen Benutzernamen eingeben.");
+        continue;
+      }
+
+      const pwd = window.prompt("Passwort eingeben:");
+      if(pwd === null || !pwd.trim()){
+        window.alert("Passwort erforderlich.");
+        continue;
+      }
+
+      try{
+        await apiFetch("/api/login", { username, password: pwd });
+        currentUser = username;
+        break;
+      }catch{
+        const wantsRegister = window.confirm(`Login fehlgeschlagen. Benutzer "${username}" registrieren?`);
+        if(!wantsRegister) continue;
+        const pwdConfirm = window.prompt("Passwort bestätigen:");
+        if(pwdConfirm !== pwd){
+          window.alert("Passwörter stimmen nicht überein.");
+          continue;
+        }
+        try{
+          await apiFetch("/api/register", { username, password: pwd });
+          currentUser = username;
+          break;
+        }catch(err){
+          window.alert(err.message || "Registrierung fehlgeschlagen.");
+        }
+      }
+    }
+  }
+
+  async function loadState(){
     try{
-      const raw = localStorage.getItem(LS_KEY);
-      if(!raw) return structuredClone(defaultState);
-      const s = JSON.parse(raw);
+      const data = await apiFetch(`/api/state?username=${encodeURIComponent(currentUser)}`);
+      if(!data || !data.state) return structuredClone(defaultState);
       return {
         ...structuredClone(defaultState),
-        ...s,
-        stats: { ...structuredClone(defaultState.stats), ...(s.stats||{}) }
+        ...data.state,
+        stats: { ...structuredClone(defaultState.stats), ...(data.state.stats||{}) }
       };
     }catch{
       return structuredClone(defaultState);
     }
   }
   function saveState(){
-    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    if(!currentUser || !state) return;
+    void apiFetch("/api/state", { username: currentUser, state });
   }
 
   function buildShoe(){
@@ -1223,10 +1281,15 @@
   });
 
   // ---------- Init ----------
-  audioOn = !!state.audioOn;
-  buildShoe();
-  render();
-  log("Tip: Setze Chips, dann Deal. Viel Glück ✨", "muted");
+  (async () => {
+    await ensureSession();
+    state = await loadState();
+    logEl.innerHTML = "";
+    audioOn = !!state.audioOn;
+    buildShoe();
+    render();
+    log("Tip: Setze Chips, dann Deal. Viel Glück ✨", "muted");
+  })();
 })();
 </script>
 </body>
