@@ -399,20 +399,58 @@
     .stat .v{font-size:18px; font-weight:900; margin-top:4px}
     .stat .v small{font-size:12px; color:var(--muted); font-weight:700}
 
-    .log{
+    .leaderboard{
       margin-top:12px;
       padding:12px;
       border-radius: 14px;
       background: rgba(0,0,0,.22);
       border:1px solid rgba(255,255,255,.06);
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .leaderboard-list{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
       max-height: 220px;
       overflow:auto;
-      font-size:12px;
-      color: rgba(234,243,239,.85);
     }
-    .log .muted{color: rgba(169,193,185,.85)}
-    .log .good{color: rgba(93,255,177,.92)}
-    .log .bad{color: rgba(255,93,93,.92)}
+    .leaderboard-item{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:8px 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.06);
+      font-size:12px;
+      cursor:pointer;
+      transition: background .12s ease, border-color .12s ease;
+    }
+    .leaderboard-item:hover{background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12)}
+    .leaderboard-item.active{border-color: rgba(216,177,90,.45)}
+    .leaderboard-item .name{font-weight:700}
+    .leaderboard-item .balance{color: var(--muted)}
+    .leaderboard-details{
+      padding:10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.07);
+      font-size:12px;
+      color: rgba(234,243,239,.9);
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .leaderboard-details .line{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      color: var(--muted);
+    }
+    .leaderboard-details .line b{color: var(--text)}
 
     .toast{
       position:fixed;
@@ -468,10 +506,88 @@
       letter-spacing:.06em;
       white-space:nowrap;
     }
+    .muted{color: var(--muted)}
+
+    .is-hidden{display:none !important}
+
+    .auth-overlay{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(2,7,5,.82);
+      backdrop-filter: blur(8px);
+      z-index:120;
+      padding:18px;
+    }
+    .auth-card{
+      width:min(420px, 92vw);
+      background: rgba(10,24,18,.9);
+      border:1px solid rgba(216,177,90,.18);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+    .auth-card h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color: rgba(216,177,90,.86);
+    }
+    .auth-field{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      font-size:12px;
+      color: var(--muted);
+    }
+    .auth-field input{
+      padding:11px 12px;
+      border-radius: 12px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      font-size:14px;
+      outline:none;
+    }
+    .auth-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .auth-error{
+      font-size:12px;
+      color: rgba(255,93,93,.92);
+      min-height:16px;
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="auth-overlay" id="authOverlay" role="dialog" aria-modal="true" aria-label="Login">
+    <div class="auth-card">
+      <h2>Login</h2>
+      <div class="auth-field">
+        <label for="authUser">Nutzername</label>
+        <input id="authUser" name="username" autocomplete="username" />
+      </div>
+      <div class="auth-field">
+        <label for="authPass">Passwort</label>
+        <input id="authPass" type="password" name="password" autocomplete="current-password" />
+      </div>
+      <div class="auth-error" id="authError" aria-live="polite"></div>
+      <div class="auth-actions">
+        <button class="btn primary" id="loginBtn">Anmelden</button>
+        <button class="btn" id="registerBtn">Registrieren</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap is-hidden" id="appWrap">
     <div class="topbar">
       <div class="brand">
         <div class="logo" aria-hidden="true"></div>
@@ -495,7 +611,6 @@
           </div>
         </div>
         <button class="btn small" id="soundBtn" title="Sound an/aus (S)">🔊 Sound</button>
-        <button class="btn small" id="resetStatsBtn" title="Stats zurücksetzen">↺ Stats</button>
       </div>
     </div>
 
@@ -586,7 +701,17 @@
           </div>
         </div>
 
-        <div class="log" id="log"></div>
+        <div class="leaderboard" id="leaderboard">
+          <div class="leaderboard-list" id="leaderboardList"></div>
+          <div class="leaderboard-details" id="leaderboardDetails">
+            <div class="line"><span>Spieler</span><b>—</b></div>
+            <div class="line"><span>Kontostand</span><b>—</b></div>
+            <div class="line"><span>Runden</span><b>—</b></div>
+            <div class="line"><span>Win / Lose / Push</span><b>—</b></div>
+            <div class="line"><span>Winrate</span><b>—</b></div>
+            <div class="line"><span>Best Streak</span><b>—</b></div>
+          </div>
+        </div>
       </div>
     </aside>
   </div>
@@ -616,9 +741,7 @@
   const clearBetBtn = $("#clearBetBtn");
   const newShoeBtn = $("#newShoeBtn");
   const soundBtn = $("#soundBtn");
-  const resetStatsBtn = $("#resetStatsBtn");
-
-  const logEl = $("#log");
+  const logEl = null;
   const toastEl = $("#toast");
   const toastText = $("#toastText");
 
@@ -631,10 +754,21 @@
   const statDecks = $("#statDecks");
   const statLeft = $("#statLeft");
 
+  const appWrap = $("#appWrap");
+  const authOverlay = $("#authOverlay");
+  const authUserInput = $("#authUser");
+  const authPassInput = $("#authPass");
+  const authError = $("#authError");
+  const loginBtn = $("#loginBtn");
+  const registerBtn = $("#registerBtn");
+  const leaderboardList = $("#leaderboardList");
+  const leaderboardDetails = $("#leaderboardDetails");
+
   const SUITS = ["♠","♥","♦","♣"];
   const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
 
   const fmt = (n) => n.toLocaleString("de-CH");
+  const AUTH_STORAGE_KEY = "bj_auth_v1";
 
   function toast(msg){
     toastText.textContent = msg;
@@ -643,12 +777,8 @@
     toast._t = window.setTimeout(()=>toastEl.classList.remove("show"), 1300);
   }
 
-  function log(line, cls="muted"){
-    const div = document.createElement("div");
-    div.className = cls;
-    div.textContent = line;
-    logEl.appendChild(div);
-    logEl.scrollTop = logEl.scrollHeight;
+  function log(){
+    // intentionally muted in UI
   }
 
   // ---------- Simple WebAudio SFX ----------
@@ -689,7 +819,6 @@
   }
 
   // ---------- Game State ----------
-  const LS_KEY = "bj_realistic_v1";
   const defaultState = {
     bankroll: 2500,
     bet: 0,
@@ -697,7 +826,8 @@
     stats: { rounds:0, win:0, lose:0, push:0, streak:0, bestStreak:0 },
     audioOn: true
   };
-  let state = loadState();
+  let currentUser = null;
+  let state = null;
 
   let shoe = [];
   let player = [];
@@ -706,22 +836,143 @@
   let dealerHoleHidden = true;
   let doubled = false;
 
-  function loadState(){
+  async function apiFetch(path, payload){
+    const options = payload ? {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    } : {};
+    const res = await fetch(path, options);
+    const data = await res.json().catch(() => ({}));
+    if(!res.ok){
+      const message = data && data.error ? data.error : "Serverfehler";
+      throw new Error(message);
+    }
+    return data;
+  }
+
+  function normalizeUsername(name){
+    return name.trim();
+  }
+
+  function normalizeState(serverState){
+    if(!serverState) return structuredClone(defaultState);
+    return {
+      ...structuredClone(defaultState),
+      ...serverState,
+      stats: { ...structuredClone(defaultState.stats), ...(serverState.stats||{}) }
+    };
+  }
+
+  function saveAuth(username, password){
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ username, password }));
+  }
+
+  function loadAuth(){
     try{
-      const raw = localStorage.getItem(LS_KEY);
-      if(!raw) return structuredClone(defaultState);
-      const s = JSON.parse(raw);
-      return {
-        ...structuredClone(defaultState),
-        ...s,
-        stats: { ...structuredClone(defaultState.stats), ...(s.stats||{}) }
-      };
+      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+      if(!raw) return null;
+      const parsed = JSON.parse(raw);
+      if(!parsed || !parsed.username || !parsed.password) return null;
+      return parsed;
     }catch{
-      return structuredClone(defaultState);
+      return null;
+    }
+  }
+
+  function renderLeaderboard(users){
+    leaderboardList.innerHTML = "";
+    if(!users.length){
+      leaderboardList.innerHTML = "<div class=\"muted\">Keine Spieler gefunden.</div>";
+      return;
+    }
+    users.forEach((user, idx) => {
+      const item = document.createElement("div");
+      item.className = "leaderboard-item" + (idx === 0 ? " active" : "");
+      item.innerHTML = `
+        <span class="name">${user.username}</span>
+        <span class="balance">${fmt(user.balance)} CHF</span>
+      `;
+      item.addEventListener("click", () => {
+        document.querySelectorAll(".leaderboard-item").forEach(el => el.classList.remove("active"));
+        item.classList.add("active");
+        renderLeaderboardDetails(user);
+      });
+      leaderboardList.appendChild(item);
+    });
+    renderLeaderboardDetails(users[0]);
+  }
+
+  function renderLeaderboardDetails(user){
+    if(!user){
+      leaderboardDetails.innerHTML = `
+        <div class="line"><span>Spieler</span><b>—</b></div>
+        <div class="line"><span>Kontostand</span><b>—</b></div>
+        <div class="line"><span>Runden</span><b>—</b></div>
+        <div class="line"><span>Win / Lose / Push</span><b>—</b></div>
+        <div class="line"><span>Winrate</span><b>—</b></div>
+        <div class="line"><span>Best Streak</span><b>—</b></div>
+      `;
+      return;
+    }
+    const stats = user.stats || { rounds:0, win:0, lose:0, push:0, bestStreak:0 };
+    const played = stats.rounds || 0;
+    const winrate = played ? Math.round((stats.win / played) * 100) : 0;
+    leaderboardDetails.innerHTML = `
+      <div class="line"><span>Spieler</span><b>${user.username}</b></div>
+      <div class="line"><span>Kontostand</span><b>${fmt(user.balance)} CHF</b></div>
+      <div class="line"><span>Runden</span><b>${stats.rounds}</b></div>
+      <div class="line"><span>Win / Lose / Push</span><b>${stats.win} / ${stats.lose} / ${stats.push}</b></div>
+      <div class="line"><span>Winrate</span><b>${winrate}%</b></div>
+      <div class="line"><span>Best Streak</span><b>${stats.bestStreak} W</b></div>
+    `;
+  }
+
+  async function fetchLeaderboard(){
+    try{
+      const data = await apiFetch("/api/leaderboard");
+      renderLeaderboard(data.users || []);
+    }catch{
+      renderLeaderboard([]);
+    }
+  }
+
+  async function handleAuth(action){
+    authError.textContent = "";
+    const username = normalizeUsername(authUserInput.value || "");
+    const password = authPassInput.value || "";
+    if(!username){
+      authError.textContent = "Bitte einen Nutzernamen eingeben.";
+      return;
+    }
+    if(!password.trim()){
+      authError.textContent = "Bitte ein Passwort eingeben.";
+      return;
+    }
+
+    try{
+      const data = await apiFetch(action === "register" ? "/api/register" : "/api/login", {
+        username,
+        password
+      });
+      currentUser = username;
+      saveAuth(username, password);
+      state = normalizeState(data.state);
+      authOverlay.classList.add("is-hidden");
+      appWrap.classList.remove("is-hidden");
+      audioOn = !!state.audioOn;
+      buildShoe();
+      render();
+      await fetchLeaderboard();
+      log("Tip: Setze Chips, dann Deal. Viel Glück ✨", "muted");
+    }catch(err){
+      authError.textContent = err.message || "Anmeldung fehlgeschlagen.";
     }
   }
   function saveState(){
-    localStorage.setItem(LS_KEY, JSON.stringify(state));
+    if(!currentUser || !state) return;
+    void apiFetch("/api/state", { username: currentUser, state });
+    void fetchLeaderboard();
   }
 
   function buildShoe(){
@@ -1160,6 +1411,11 @@
   }
 
   // ---------- Events ----------
+  loginBtn.addEventListener("click", () => handleAuth("login"));
+  registerBtn.addEventListener("click", () => handleAuth("register"));
+  authPassInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter") handleAuth("login");
+  });
   document.querySelectorAll(".chip").forEach(ch => {
     ch.addEventListener("click", () => addBet(parseInt(ch.dataset.amt,10)));
   });
@@ -1184,15 +1440,6 @@
     saveState();
     render();
     toast(state.audioOn ? "Sound an" : "Sound aus");
-    beep("click");
-  });
-
-  resetStatsBtn.addEventListener("click", () => {
-    state.stats = structuredClone(defaultState.stats);
-    saveState();
-    render();
-    log("Stats zurückgesetzt.", "muted");
-    toast("Stats reset");
     beep("click");
   });
 
@@ -1223,10 +1470,15 @@
   });
 
   // ---------- Init ----------
-  audioOn = !!state.audioOn;
-  buildShoe();
-  render();
-  log("Tip: Setze Chips, dann Deal. Viel Glück ✨", "muted");
+  (async () => {
+    authOverlay.classList.remove("is-hidden");
+    const saved = loadAuth();
+    if(saved){
+      authUserInput.value = saved.username;
+      authPassInput.value = saved.password;
+      await handleAuth("login");
+    }
+  })();
 })();
 </script>
 </body>
