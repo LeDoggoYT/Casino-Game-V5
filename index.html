@@ -937,16 +937,33 @@
     }
   }
 
-  async function handleAuth(action){
+  function setAuthVisibility(isVisible){
+    if(isVisible){
+      authOverlay.classList.remove("is-hidden");
+      authOverlay.removeAttribute("aria-hidden");
+      authOverlay.style.pointerEvents = "auto";
+      appWrap.classList.add("is-hidden");
+      appWrap.setAttribute("aria-hidden", "true");
+    }else{
+      authOverlay.classList.add("is-hidden");
+      authOverlay.setAttribute("aria-hidden", "true");
+      authOverlay.style.pointerEvents = "none";
+      appWrap.classList.remove("is-hidden");
+      appWrap.removeAttribute("aria-hidden");
+    }
+  }
+
+  async function handleAuth(action, options = {}){
+    const { silent = false } = options;
     authError.textContent = "";
     const username = normalizeUsername(authUserInput.value || "");
     const password = authPassInput.value || "";
     if(!username){
-      authError.textContent = "Bitte einen Nutzernamen eingeben.";
+      if(!silent) authError.textContent = "Bitte einen Nutzernamen eingeben.";
       return;
     }
     if(!password.trim()){
-      authError.textContent = "Bitte ein Passwort eingeben.";
+      if(!silent) authError.textContent = "Bitte ein Passwort eingeben.";
       return;
     }
 
@@ -958,15 +975,18 @@
       currentUser = username;
       saveAuth(username, password);
       state = normalizeState(data.state);
-      authOverlay.classList.add("is-hidden");
-      appWrap.classList.remove("is-hidden");
+      setAuthVisibility(false);
       audioOn = !!state.audioOn;
       buildShoe();
       render();
       await fetchLeaderboard();
       log("Tip: Setze Chips, dann Deal. Viel Glück ✨", "muted");
     }catch(err){
-      authError.textContent = err.message || "Anmeldung fehlgeschlagen.";
+      if(!silent){
+        authError.textContent = err.message || "Anmeldung fehlgeschlagen.";
+      }else{
+        setAuthVisibility(true);
+      }
     }
   }
   function saveState(){
@@ -1471,12 +1491,12 @@
 
   // ---------- Init ----------
   (async () => {
-    authOverlay.classList.remove("is-hidden");
+    setAuthVisibility(true);
     const saved = loadAuth();
     if(saved){
       authUserInput.value = saved.username;
       authPassInput.value = saved.password;
-      await handleAuth("login");
+      await handleAuth("login", { silent: true });
     }
   })();
 })();
