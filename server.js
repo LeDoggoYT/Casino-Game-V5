@@ -121,6 +121,17 @@ async function handleSaveState(req, res) {
   return sendJson(res, 200, { ok: true });
 }
 
+async function handleLeaderboard(req, res) {
+  const users = await readJson(usersFile);
+  const list = Object.entries(users).map(([username, data]) => ({
+    username,
+    balance: typeof data.balance === "number" ? data.balance : defaultState.bankroll,
+    stats: data.state?.stats || defaultState.stats
+  }));
+  list.sort((a, b) => b.balance - a.balance);
+  return sendJson(res, 200, { ok: true, users: list.slice(0, 5) });
+}
+
 async function handleStatic(req, res, url) {
   const filePath = url.pathname === "/" ? "/index.html" : url.pathname;
   const fullPath = join(__dirname, filePath);
@@ -151,6 +162,9 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "POST" && url.pathname === "/api/state") {
       return await handleSaveState(req, res);
+    }
+    if (req.method === "GET" && url.pathname === "/api/leaderboard") {
+      return await handleLeaderboard(req, res);
     }
     return await handleStatic(req, res, url);
   } catch {
