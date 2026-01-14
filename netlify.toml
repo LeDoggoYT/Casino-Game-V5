@@ -1,0 +1,5 @@
+[[redirects]]
+  from = "/api/*"
+  to = "https://casino-game-v5.onrender.com/api/:splat"
+  status = 200
+  force = true
