@@ -468,10 +468,87 @@
       letter-spacing:.06em;
       white-space:nowrap;
     }
+
+    .is-hidden{display:none}
+
+    .auth-overlay{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(2,7,5,.82);
+      backdrop-filter: blur(8px);
+      z-index:120;
+      padding:18px;
+    }
+    .auth-card{
+      width:min(420px, 92vw);
+      background: rgba(10,24,18,.9);
+      border:1px solid rgba(216,177,90,.18);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+    .auth-card h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color: rgba(216,177,90,.86);
+    }
+    .auth-field{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      font-size:12px;
+      color: var(--muted);
+    }
+    .auth-field input{
+      padding:11px 12px;
+      border-radius: 12px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      font-size:14px;
+      outline:none;
+    }
+    .auth-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .auth-error{
+      font-size:12px;
+      color: rgba(255,93,93,.92);
+      min-height:16px;
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="auth-overlay" id="authOverlay" role="dialog" aria-modal="true" aria-label="Login">
+    <div class="auth-card">
+      <h2>Login</h2>
+      <div class="auth-field">
+        <label for="authUser">Nutzername</label>
+        <input id="authUser" name="username" autocomplete="username" />
+      </div>
+      <div class="auth-field">
+        <label for="authPass">Passwort</label>
+        <input id="authPass" type="password" name="password" autocomplete="current-password" />
+      </div>
+      <div class="auth-error" id="authError" aria-live="polite"></div>
+      <div class="auth-actions">
+        <button class="btn primary" id="loginBtn">Anmelden</button>
+        <button class="btn" id="registerBtn">Registrieren</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap is-hidden" id="appWrap">
     <div class="topbar">
       <div class="brand">
         <div class="logo" aria-hidden="true"></div>
@@ -631,6 +708,14 @@
   const statDecks = $("#statDecks");
   const statLeft = $("#statLeft");
 
+  const appWrap = $("#appWrap");
+  const authOverlay = $("#authOverlay");
+  const authUserInput = $("#authUser");
+  const authPassInput = $("#authPass");
+  const authError = $("#authError");
+  const loginBtn = $("#loginBtn");
+  const registerBtn = $("#registerBtn");
+
   const SUITS = ["♠","♥","♦","♣"];
   const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
 
@@ -725,56 +810,44 @@
     return name.trim();
   }
 
-  async function ensureSession(){
-    while(true){
-      const nameInput = window.prompt("Benutzername eingeben:");
-      if(nameInput === null) continue;
-      const username = normalizeUsername(nameInput);
-      if(!username){
-        window.alert("Bitte einen Benutzernamen eingeben.");
-        continue;
-      }
-
-      const pwd = window.prompt("Passwort eingeben:");
-      if(pwd === null || !pwd.trim()){
-        window.alert("Passwort erforderlich.");
-        continue;
-      }
-
-      try{
-        await apiFetch("/api/login", { username, password: pwd });
-        currentUser = username;
-        break;
-      }catch{
-        const wantsRegister = window.confirm(`Login fehlgeschlagen. Benutzer "${username}" registrieren?`);
-        if(!wantsRegister) continue;
-        const pwdConfirm = window.prompt("Passwort bestätigen:");
-        if(pwdConfirm !== pwd){
-          window.alert("Passwörter stimmen nicht überein.");
-          continue;
-        }
-        try{
-          await apiFetch("/api/register", { username, password: pwd });
-          currentUser = username;
-          break;
-        }catch(err){
-          window.alert(err.message || "Registrierung fehlgeschlagen.");
-        }
-      }
-    }
+  function normalizeState(serverState){
+    if(!serverState) return structuredClone(defaultState);
+    return {
+      ...structuredClone(defaultState),
+      ...serverState,
+      stats: { ...structuredClone(defaultState.stats), ...(serverState.stats||{}) }
+    };
   }
 
-  async function loadState(){
+  async function handleAuth(action){
+    authError.textContent = "";
+    const username = normalizeUsername(authUserInput.value || "");
+    const password = authPassInput.value || "";
+    if(!username){
+      authError.textContent = "Bitte einen Nutzernamen eingeben.";
+      return;
+    }
+    if(!password.trim()){
+      authError.textContent = "Bitte ein Passwort eingeben.";
+      return;
+    }
+
     try{
-      const data = await apiFetch(`/api/state?username=${encodeURIComponent(currentUser)}`);
-      if(!data || !data.state) return structuredClone(defaultState);
-      return {
-        ...structuredClone(defaultState),
-        ...data.state,
-        stats: { ...structuredClone(defaultState.stats), ...(data.state.stats||{}) }
-      };
-    }catch{
-      return structuredClone(defaultState);
+      const data = await apiFetch(action === "register" ? "/api/register" : "/api/login", {
+        username,
+        password
+      });
+      currentUser = username;
+      state = normalizeState(data.state);
+      authOverlay.classList.add("is-hidden");
+      appWrap.classList.remove("is-hidden");
+      logEl.innerHTML = "";
+      audioOn = !!state.audioOn;
+      buildShoe();
+      render();
+      log("Tip: Setze Chips, dann Deal. Viel Glück ✨", "muted");
+    }catch(err){
+      authError.textContent = err.message || "Anmeldung fehlgeschlagen.";
     }
   }
   function saveState(){
@@ -1218,6 +1291,11 @@
   }
 
   // ---------- Events ----------
+  loginBtn.addEventListener("click", () => handleAuth("login"));
+  registerBtn.addEventListener("click", () => handleAuth("register"));
+  authPassInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter") handleAuth("login");
+  });
   document.querySelectorAll(".chip").forEach(ch => {
     ch.addEventListener("click", () => addBet(parseInt(ch.dataset.amt,10)));
   });
@@ -1281,15 +1359,7 @@
   });
 
   // ---------- Init ----------
-  (async () => {
-    await ensureSession();
-    state = await loadState();
-    logEl.innerHTML = "";
-    audioOn = !!state.audioOn;
-    buildShoe();
-    render();
-    log("Tip: Setze Chips, dann Deal. Viel Glück ✨", "muted");
-  })();
+  authOverlay.classList.remove("is-hidden");
 })();
 </script>
 </body>

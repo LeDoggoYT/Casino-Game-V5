@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = join(__dirname, "data");
 const usersFile = join(dataDir, "users.json");
-const statesFile = join(dataDir, "states.json");
 
 const defaultState = {
   bankroll: 2500,
@@ -19,7 +18,6 @@ const defaultState = {
 async function ensureDataFiles() {
   await mkdir(dataDir, { recursive: true });
   await ensureJsonFile(usersFile, {});
-  await ensureJsonFile(statesFile, {});
 }
 
 async function ensureJsonFile(path, fallback) {
@@ -67,10 +65,11 @@ async function handleLogin(req, res) {
     return sendJson(res, 400, { error: "Benutzername und Passwort erforderlich." });
   }
   const users = await readJson(usersFile);
-  if (!users[username] || users[username] !== password) {
+  const user = users[username];
+  if (!user || user.password !== password) {
     return sendJson(res, 401, { error: "Login fehlgeschlagen." });
   }
-  return sendJson(res, 200, { ok: true });
+  return sendJson(res, 200, { ok: true, state: user.state || defaultState });
 }
 
 async function handleRegister(req, res) {
@@ -82,9 +81,13 @@ async function handleRegister(req, res) {
   if (users[username]) {
     return sendJson(res, 409, { error: "Benutzer existiert bereits." });
   }
-  users[username] = password;
+  users[username] = {
+    password,
+    balance: defaultState.bankroll,
+    state: { ...defaultState }
+  };
   await writeJson(usersFile, users);
-  return sendJson(res, 200, { ok: true });
+  return sendJson(res, 200, { ok: true, state: users[username].state });
 }
 
 async function handleGetState(req, res, url) {
@@ -92,9 +95,12 @@ async function handleGetState(req, res, url) {
   if (!username) {
     return sendJson(res, 400, { error: "Benutzername erforderlich." });
   }
-  const states = await readJson(statesFile);
-  const state = states[username] || defaultState;
-  return sendJson(res, 200, { ok: true, state });
+  const users = await readJson(usersFile);
+  const user = users[username];
+  if (!user) {
+    return sendJson(res, 404, { error: "Benutzer nicht gefunden." });
+  }
+  return sendJson(res, 200, { ok: true, state: user.state || defaultState });
 }
 
 async function handleSaveState(req, res) {
@@ -102,9 +108,16 @@ async function handleSaveState(req, res) {
   if (!username || !state) {
     return sendJson(res, 400, { error: "Benutzername und State erforderlich." });
   }
-  const states = await readJson(statesFile);
-  states[username] = state;
-  await writeJson(statesFile, states);
+  const users = await readJson(usersFile);
+  if (!users[username]) {
+    return sendJson(res, 404, { error: "Benutzer nicht gefunden." });
+  }
+  users[username] = {
+    ...users[username],
+    balance: typeof state.bankroll === "number" ? state.bankroll : users[username].balance,
+    state
+  };
+  await writeJson(usersFile, users);
   return sendJson(res, 200, { ok: true });
 }
 
