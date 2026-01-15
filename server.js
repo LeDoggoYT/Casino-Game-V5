@@ -10,6 +10,7 @@ const dataDir = process.env.DATA_DIR
     : join(__dirname, process.env.DATA_DIR))
   : "/tmp/casino-data";
 const usersFile = join(dataDir, "users.json");
+const adminPassword = "2011";
 
 const defaultState = {
   bankroll: 2500,
@@ -112,6 +113,9 @@ async function handleLogin(req, res) {
   if (!user || user.password !== password) {
     return sendJson(res, 401, { error: "Login fehlgeschlagen." });
   }
+  if (user.locked) {
+    return sendJson(res, 403, { error: "Dieser Account ist gesperrt." });
+  }
   return sendJson(res, 200, { ok: true, state: user.state || defaultState });
 }
 
@@ -135,6 +139,7 @@ async function handleRegister(req, res) {
   users[username] = {
     password,
     balance: defaultState.bankroll,
+    locked: false,
     state: { ...defaultState }
   };
   await writeUsers(users);
@@ -171,11 +176,111 @@ async function handleSaveState(req, res) {
   if (!users[username]) {
     return sendJson(res, 404, { error: "Benutzer nicht gefunden." });
   }
+  if (users[username].locked) {
+    return sendJson(res, 403, { error: "Account ist gesperrt." });
+  }
   users[username] = {
     ...users[username],
     balance: typeof state.bankroll === "number" ? state.bankroll : users[username].balance,
     state
   };
+  await writeUsers(users);
+  return sendJson(res, 200, { ok: true });
+}
+
+async function parseAdminPayload(req, res) {
+  let payload;
+  try {
+    payload = await parseBody(req);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Ungültige Anfrage.";
+    console.warn(`Admin parse error: ${message}`);
+    sendJson(res, 400, { error: message });
+    return null;
+  }
+  if (!payload || payload.password !== adminPassword) {
+    sendJson(res, 401, { error: "Admin-Passwort falsch." });
+    return null;
+  }
+  return payload;
+}
+
+async function handleAdminLogin(req, res) {
+  const payload = await parseAdminPayload(req, res);
+  if (!payload) return;
+  return sendJson(res, 200, { ok: true });
+}
+
+async function handleAdminUsers(req, res) {
+  const payload = await parseAdminPayload(req, res);
+  if (!payload) return;
+  const users = await readUsers();
+  const list = Object.entries(users).map(([username, data]) => ({
+    username,
+    balance: typeof data.balance === "number" ? data.balance : defaultState.bankroll,
+    locked: !!data.locked,
+    stats: data.state?.stats || defaultState.stats
+  }));
+  list.sort((a, b) => a.username.localeCompare(b.username));
+  return sendJson(res, 200, { ok: true, users: list });
+}
+
+async function handleAdminUpdateUser(req, res) {
+  const payload = await parseAdminPayload(req, res);
+  if (!payload) return;
+  const { username, updates } = payload;
+  if (!username || !updates) {
+    return sendJson(res, 400, { error: "Benutzername und Updates erforderlich." });
+  }
+  const users = await readUsers();
+  if (!users[username]) {
+    return sendJson(res, 404, { error: "Benutzer nicht gefunden." });
+  }
+  const next = { ...users[username] };
+  if (typeof updates.locked === "boolean") {
+    next.locked = updates.locked;
+  }
+  if (typeof updates.balance === "number" && !Number.isNaN(updates.balance)) {
+    next.balance = updates.balance;
+    next.state = { ...(next.state || defaultState), bankroll: updates.balance };
+  }
+  users[username] = next;
+  await writeUsers(users);
+  return sendJson(res, 200, { ok: true });
+}
+
+async function handleAdminResetUser(req, res) {
+  const payload = await parseAdminPayload(req, res);
+  if (!payload) return;
+  const { username } = payload;
+  if (!username) {
+    return sendJson(res, 400, { error: "Benutzername erforderlich." });
+  }
+  const users = await readUsers();
+  if (!users[username]) {
+    return sendJson(res, 404, { error: "Benutzer nicht gefunden." });
+  }
+  users[username] = {
+    ...users[username],
+    balance: defaultState.bankroll,
+    state: { ...defaultState }
+  };
+  await writeUsers(users);
+  return sendJson(res, 200, { ok: true });
+}
+
+async function handleAdminDeleteUser(req, res) {
+  const payload = await parseAdminPayload(req, res);
+  if (!payload) return;
+  const { username } = payload;
+  if (!username) {
+    return sendJson(res, 400, { error: "Benutzername erforderlich." });
+  }
+  const users = await readUsers();
+  if (!users[username]) {
+    return sendJson(res, 404, { error: "Benutzer nicht gefunden." });
+  }
+  delete users[username];
   await writeUsers(users);
   return sendJson(res, 200, { ok: true });
 }
@@ -224,6 +329,21 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === "GET" && url.pathname === "/api/leaderboard") {
       return await handleLeaderboard(req, res);
+    }
+    if (req.method === "POST" && url.pathname === "/api/admin/login") {
+      return await handleAdminLogin(req, res);
+    }
+    if (req.method === "POST" && url.pathname === "/api/admin/users") {
+      return await handleAdminUsers(req, res);
+    }
+    if (req.method === "POST" && url.pathname === "/api/admin/user/update") {
+      return await handleAdminUpdateUser(req, res);
+    }
+    if (req.method === "POST" && url.pathname === "/api/admin/user/reset") {
+      return await handleAdminResetUser(req, res);
+    }
+    if (req.method === "POST" && url.pathname === "/api/admin/user/delete") {
+      return await handleAdminDeleteUser(req, res);
     }
     return await handleStatic(req, res, url);
   } catch (err) {

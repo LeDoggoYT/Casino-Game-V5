@@ -452,6 +452,107 @@
     }
     .leaderboard-details .line b{color: var(--text)}
 
+    .admin-panel .body{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .admin-status{
+      font-size:11px;
+      color: var(--muted);
+      border:1px solid rgba(255,255,255,.16);
+      border-radius: 8px;
+      padding:3px 8px;
+      letter-spacing:.06em;
+      text-transform:uppercase;
+    }
+    .admin-toolbar{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .admin-list{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      max-height: 380px;
+      overflow:auto;
+    }
+    .admin-user{
+      padding:12px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.25);
+      border:1px solid rgba(255,255,255,.06);
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .admin-user-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .admin-user-title{
+      display:flex;
+      align-items:center;
+      gap:8px;
+      font-size:13px;
+    }
+    .admin-badge{
+      font-size:11px;
+      padding:2px 8px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.15);
+    }
+    .admin-badge.ok{
+      color: var(--ok);
+      border-color: rgba(93,255,177,.35);
+      background: rgba(93,255,177,.08);
+    }
+    .admin-badge.danger{
+      color: var(--danger);
+      border-color: rgba(255,93,93,.35);
+      background: rgba(255,93,93,.08);
+    }
+    .admin-meta{
+      font-size:12px;
+      color: var(--muted);
+    }
+    .admin-actions-row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .admin-actions-row label{
+      font-size:12px;
+      color: var(--muted);
+      display:flex;
+      align-items:center;
+      gap:6px;
+    }
+    .admin-actions-row input[type="number"]{
+      width:120px;
+      padding:8px 10px;
+      border-radius: 10px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      font-size:12px;
+    }
+    .admin-actions-row input[type="checkbox"]{
+      width:16px;
+      height:16px;
+    }
+    .admin-action-buttons{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+
     .toast{
       position:fixed;
       left:50%;
@@ -714,6 +815,34 @@
         </div>
       </div>
     </aside>
+
+    <aside class="panel admin-panel" aria-label="Admin">
+      <div class="head">
+        <h2>Admin</h2>
+        <span class="admin-status" id="adminStatus">Gesperrt</span>
+      </div>
+      <div class="body">
+        <div id="adminGate">
+          <p class="muted">Hier kannst du Nutzer sperren, den Kontostand ändern und Daten zurücksetzen.</p>
+          <div class="auth-field">
+            <label for="adminPass">Admin-Passwort</label>
+            <input id="adminPass" type="password" autocomplete="off" />
+          </div>
+          <div class="auth-error" id="adminError" aria-live="polite"></div>
+          <div class="admin-actions-row">
+            <button class="btn primary small" id="adminLoginBtn">Admin öffnen</button>
+          </div>
+        </div>
+
+        <div id="adminContent" class="is-hidden">
+          <div class="admin-toolbar">
+            <button class="btn small" id="adminRefreshBtn">Aktualisieren</button>
+            <button class="btn small danger" id="adminLockBtn">Admin sperren</button>
+          </div>
+          <div class="admin-list" id="adminUserList"></div>
+        </div>
+      </div>
+    </aside>
   </div>
 
   <div class="toast" id="toast"><span class="dot"></span><span id="toastText">—</span></div>
@@ -763,6 +892,15 @@
   const registerBtn = $("#registerBtn");
   const leaderboardList = $("#leaderboardList");
   const leaderboardDetails = $("#leaderboardDetails");
+  const adminPassInput = $("#adminPass");
+  const adminLoginBtn = $("#adminLoginBtn");
+  const adminRefreshBtn = $("#adminRefreshBtn");
+  const adminLockBtn = $("#adminLockBtn");
+  const adminStatus = $("#adminStatus");
+  const adminGate = $("#adminGate");
+  const adminContent = $("#adminContent");
+  const adminError = $("#adminError");
+  const adminUserList = $("#adminUserList");
 
   const SUITS = ["♠","♥","♦","♣"];
   const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
@@ -770,6 +908,8 @@
   const fmt = (n) => n.toLocaleString("de-CH");
   const AUTH_STORAGE_KEY = "bj_auth_v1";
   let authCache = null;
+  let adminPasswordCache = null;
+  let adminAuthed = false;
 
   function toast(msg){
     toastText.textContent = msg;
@@ -935,6 +1075,130 @@
       <div class="line"><span>Winrate</span><b>${winrate}%</b></div>
       <div class="line"><span>Best Streak</span><b>${stats.bestStreak} W</b></div>
     `;
+  }
+
+  function setAdminVisibility(isVisible){
+    if(isVisible){
+      adminGate.classList.add("is-hidden");
+      adminContent.classList.remove("is-hidden");
+      adminStatus.textContent = "Entsperrt";
+    }else{
+      adminGate.classList.remove("is-hidden");
+      adminContent.classList.add("is-hidden");
+      adminStatus.textContent = "Gesperrt";
+    }
+  }
+
+  function renderAdminUsers(users){
+    adminUserList.innerHTML = "";
+    if(!users.length){
+      adminUserList.innerHTML = "<div class=\"muted\">Keine Nutzer gefunden.</div>";
+      return;
+    }
+    users.forEach((user) => {
+      const card = document.createElement("div");
+      card.className = "admin-user";
+      card.dataset.username = user.username;
+
+      const head = document.createElement("div");
+      head.className = "admin-user-head";
+
+      const title = document.createElement("div");
+      title.className = "admin-user-title";
+      const name = document.createElement("strong");
+      name.textContent = user.username;
+      const badge = document.createElement("span");
+      badge.className = `admin-badge ${user.locked ? "danger" : "ok"}`;
+      badge.textContent = user.locked ? "Gesperrt" : "Aktiv";
+      title.append(name, badge);
+
+      const balance = document.createElement("span");
+      balance.className = "muted";
+      balance.textContent = `${fmt(user.balance)} CHF`;
+      head.append(title, balance);
+
+      const stats = user.stats || {};
+      const meta = document.createElement("div");
+      meta.className = "admin-meta";
+      meta.textContent = `Runden: ${stats.rounds || 0} · W/L/P: ${stats.win || 0}/${stats.lose || 0}/${stats.push || 0}`;
+
+      const actions = document.createElement("div");
+      actions.className = "admin-actions-row";
+      const balanceLabel = document.createElement("label");
+      balanceLabel.textContent = "Kontostand";
+      const balanceInput = document.createElement("input");
+      balanceInput.type = "number";
+      balanceInput.min = "0";
+      balanceInput.step = "1";
+      balanceInput.value = user.balance;
+      balanceInput.dataset.field = "balance";
+      balanceLabel.appendChild(balanceInput);
+
+      const lockLabel = document.createElement("label");
+      const lockInput = document.createElement("input");
+      lockInput.type = "checkbox";
+      lockInput.checked = !!user.locked;
+      lockInput.dataset.field = "locked";
+      lockLabel.append(lockInput, document.createTextNode("Gesperrt"));
+
+      const buttons = document.createElement("div");
+      buttons.className = "admin-action-buttons";
+      const saveBtn = document.createElement("button");
+      saveBtn.className = "btn small primary";
+      saveBtn.dataset.action = "save";
+      saveBtn.textContent = "Speichern";
+      const resetBtn = document.createElement("button");
+      resetBtn.className = "btn small";
+      resetBtn.dataset.action = "reset";
+      resetBtn.textContent = "Reset";
+      const deleteBtn = document.createElement("button");
+      deleteBtn.className = "btn small danger";
+      deleteBtn.dataset.action = "delete";
+      deleteBtn.textContent = "Löschen";
+      buttons.append(saveBtn, resetBtn, deleteBtn);
+
+      actions.append(balanceLabel, lockLabel, buttons);
+      card.append(head, meta, actions);
+      adminUserList.appendChild(card);
+    });
+  }
+
+  async function fetchAdminUsers(){
+    if(!adminAuthed || !adminPasswordCache) return;
+    try{
+      const data = await apiFetch("/api/admin/users", { password: adminPasswordCache });
+      renderAdminUsers(data.users || []);
+    }catch(err){
+      adminError.textContent = err.message || "Admin-Daten konnten nicht geladen werden.";
+    }
+  }
+
+  async function handleAdminLogin(){
+    adminError.textContent = "";
+    const password = adminPassInput.value || "";
+    if(!password.trim()){
+      adminError.textContent = "Bitte Admin-Passwort eingeben.";
+      return;
+    }
+    try{
+      await apiFetch("/api/admin/login", { password });
+      adminPasswordCache = password;
+      adminAuthed = true;
+      setAdminVisibility(true);
+      await fetchAdminUsers();
+      adminPassInput.value = "";
+      toast("Admin aktiviert");
+    }catch(err){
+      adminError.textContent = err.message || "Admin-Login fehlgeschlagen.";
+    }
+  }
+
+  function handleAdminLogout(){
+    adminAuthed = false;
+    adminPasswordCache = null;
+    setAdminVisibility(false);
+    adminUserList.innerHTML = "";
+    toast("Admin gesperrt");
   }
 
   async function fetchLeaderboard(){
@@ -1447,6 +1711,66 @@
   authPassInput.addEventListener("keydown", (e) => {
     if(e.key === "Enter") handleAuth("login");
   });
+  adminLoginBtn.addEventListener("click", handleAdminLogin);
+  adminPassInput.addEventListener("keydown", (e) => {
+    if(e.key === "Enter") handleAdminLogin();
+  });
+  adminRefreshBtn.addEventListener("click", fetchAdminUsers);
+  adminLockBtn.addEventListener("click", handleAdminLogout);
+  adminUserList.addEventListener("click", async (event) => {
+    if(!adminAuthed || !adminPasswordCache) return;
+    const button = event.target.closest("button[data-action]");
+    if(!button) return;
+    const card = button.closest(".admin-user");
+    if(!card) return;
+    const username = card.dataset.username;
+    if(!username) return;
+    const action = button.dataset.action;
+    const balanceInput = card.querySelector("input[data-field=\"balance\"]");
+    const lockInput = card.querySelector("input[data-field=\"locked\"]");
+    try{
+      if(action === "save"){
+        const balanceValue = Number(balanceInput?.value);
+        if(!Number.isFinite(balanceValue) || balanceValue < 0){
+          toast("Bitte gültigen Kontostand eingeben");
+          return;
+        }
+        await apiFetch("/api/admin/user/update", {
+          password: adminPasswordCache,
+          username,
+          updates: {
+            balance: balanceValue,
+            locked: !!lockInput?.checked
+          }
+        });
+        toast("User gespeichert");
+        await fetchAdminUsers();
+        await fetchLeaderboard();
+      }
+      if(action === "reset"){
+        if(!confirm(`Daten von ${username} zurücksetzen?`)) return;
+        await apiFetch("/api/admin/user/reset", {
+          password: adminPasswordCache,
+          username
+        });
+        toast("User zurückgesetzt");
+        await fetchAdminUsers();
+        await fetchLeaderboard();
+      }
+      if(action === "delete"){
+        if(!confirm(`User ${username} wirklich löschen?`)) return;
+        await apiFetch("/api/admin/user/delete", {
+          password: adminPasswordCache,
+          username
+        });
+        toast("User gelöscht");
+        await fetchAdminUsers();
+        await fetchLeaderboard();
+      }
+    }catch(err){
+      adminError.textContent = err.message || "Admin-Änderung fehlgeschlagen.";
+    }
+  });
   document.querySelectorAll(".chip").forEach(ch => {
     ch.addEventListener("click", () => addBet(parseInt(ch.dataset.amt,10)));
   });
@@ -1504,6 +1828,7 @@
   // ---------- Init ----------
   (async () => {
     setAuthVisibility(true);
+    setAdminVisibility(false);
     const saved = loadAuth();
     if(saved){
       authUserInput.value = saved.username;
