@@ -1,1 +1,20 @@
-
+{
+  "Tiago": {
+    "password": "Tiago2011",
+    "balance": 2500,
+    "state": {
+      "bankroll": 2500,
+      "bet": 0,
+      "decks": 6,
+      "stats": {
+        "rounds": 7,
+        "win": 1,
+        "lose": 6,
+        "push": 0,
+        "streak": 0,
+        "bestStreak": 1
+      },
+      "audioOn": true
+    }
+  }
+}

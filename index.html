@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="de">
 <head>
@@ -769,6 +770,7 @@
 
   const fmt = (n) => n.toLocaleString("de-CH");
   const AUTH_STORAGE_KEY = "bj_auth_v1";
+  let authCache = null;
 
   function toast(msg){
     toastText.textContent = msg;
@@ -866,18 +868,25 @@
   }
 
   function saveAuth(username, password){
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify({ username, password }));
+    authCache = { username, password };
+    try{
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(authCache));
+    }catch{
+      // keep in-memory fallback
+    }
   }
 
   function loadAuth(){
+    if(authCache) return authCache;
     try{
       const raw = localStorage.getItem(AUTH_STORAGE_KEY);
       if(!raw) return null;
       const parsed = JSON.parse(raw);
       if(!parsed || !parsed.username || !parsed.password) return null;
-      return parsed;
+      authCache = parsed;
+      return authCache;
     }catch{
-      return null;
+      return authCache;
     }
   }
 

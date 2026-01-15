@@ -89,7 +89,15 @@ function parseBody(req) {
 }
 
 async function handleLogin(req, res) {
-  const { username, password } = await parseBody(req);
+  let payload;
+  try {
+    payload = await parseBody(req);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Ungültige Anfrage.";
+    console.warn(`Login parse error: ${message}`);
+    return sendJson(res, 400, { error: message });
+  }
+  const { username, password } = payload;
   if (!username || !password) {
     return sendJson(res, 400, { error: "Benutzername und Passwort erforderlich." });
   }
@@ -102,7 +110,15 @@ async function handleLogin(req, res) {
 }
 
 async function handleRegister(req, res) {
-  const { username, password } = await parseBody(req);
+  let payload;
+  try {
+    payload = await parseBody(req);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Ungültige Anfrage.";
+    console.warn(`Register parse error: ${message}`);
+    return sendJson(res, 400, { error: message });
+  }
+  const { username, password } = payload;
   if (!username || !password) {
     return sendJson(res, 400, { error: "Benutzername und Passwort erforderlich." });
   }
@@ -133,7 +149,15 @@ async function handleGetState(req, res, url) {
 }
 
 async function handleSaveState(req, res) {
-  const { username, state } = await parseBody(req);
+  let payload;
+  try {
+    payload = await parseBody(req);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Ungültige Anfrage.";
+    console.warn(`State parse error: ${message}`);
+    return sendJson(res, 400, { error: message });
+  }
+  const { username, state } = payload;
   if (!username || !state) {
     return sendJson(res, 400, { error: "Benutzername und State erforderlich." });
   }
@@ -197,7 +221,7 @@ const server = createServer(async (req, res) => {
     }
     return await handleStatic(req, res, url);
   } catch (err) {
-    console.error("Serverfehler:", err);
+    console.error(`Serverfehler ${req.method} ${url.pathname}:`, err);
     const message = err instanceof Error ? err.message : "Serverfehler.";
     return sendJson(res, 500, { error: message });
   }
