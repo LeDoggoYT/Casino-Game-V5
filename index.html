@@ -452,9 +452,41 @@
     }
     .leaderboard-details .line b{color: var(--text)}
 
-    .admin-panel .body{
+    .admin-modal{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(2,7,5,.82);
+      backdrop-filter: blur(8px);
+      z-index:130;
+      padding:18px;
+    }
+    .admin-card{
+      width:min(760px, 96vw);
+      max-height: 86vh;
+      overflow:auto;
+      background: rgba(10,24,18,.9);
+      border:1px solid rgba(216,177,90,.18);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding:18px;
       display:flex;
       flex-direction:column;
+      gap:14px;
+    }
+    .admin-card h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color: rgba(216,177,90,.86);
+    }
+    .admin-header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
       gap:12px;
     }
     .admin-status{
@@ -465,6 +497,11 @@
       padding:3px 8px;
       letter-spacing:.06em;
       text-transform:uppercase;
+    }
+    .admin-body{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
     }
     .admin-toolbar{
       display:flex;
@@ -477,7 +514,7 @@
       display:flex;
       flex-direction:column;
       gap:10px;
-      max-height: 380px;
+      max-height: 420px;
       overflow:auto;
     }
     .admin-user{
@@ -551,6 +588,36 @@
       display:flex;
       gap:8px;
       flex-wrap:wrap;
+    }
+
+    .locked-overlay{
+      position:fixed;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      background: rgba(2,7,5,.92);
+      backdrop-filter: blur(8px);
+      z-index:140;
+      padding:18px;
+    }
+    .locked-card{
+      width:min(480px, 92vw);
+      background: rgba(10,24,18,.92);
+      border:1px solid rgba(255,93,93,.35);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .locked-card h2{
+      margin:0;
+      font-size:14px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color: rgba(255,93,93,.9);
     }
 
     .toast{
@@ -712,6 +779,7 @@
           </div>
         </div>
         <button class="btn small" id="soundBtn" title="Sound an/aus (S)">🔊 Sound</button>
+        <button class="btn small" id="adminToggleBtn" title="Dev Tool öffnen">Dev Tool</button>
       </div>
     </div>
 
@@ -816,12 +884,20 @@
       </div>
     </aside>
 
-    <aside class="panel admin-panel" aria-label="Admin">
-      <div class="head">
-        <h2>Admin</h2>
-        <span class="admin-status" id="adminStatus">Gesperrt</span>
+  </div>
+
+  <div class="toast" id="toast"><span class="dot"></span><span id="toastText">—</span></div>
+
+  <div class="admin-modal is-hidden" id="adminModal" role="dialog" aria-modal="true" aria-label="Dev Tool">
+    <div class="admin-card">
+      <div class="admin-header">
+        <h2>Dev Tool</h2>
+        <div class="admin-actions-row">
+          <span class="admin-status" id="adminStatus">Gesperrt</span>
+          <button class="btn small" id="adminCloseBtn">Schließen</button>
+        </div>
       </div>
-      <div class="body">
+      <div class="admin-body">
         <div id="adminGate">
           <p class="muted">Hier kannst du Nutzer sperren, den Kontostand ändern und Daten zurücksetzen.</p>
           <div class="auth-field">
@@ -842,10 +918,15 @@
           <div class="admin-list" id="adminUserList"></div>
         </div>
       </div>
-    </aside>
+    </div>
   </div>
 
-  <div class="toast" id="toast"><span class="dot"></span><span id="toastText">—</span></div>
+  <div class="locked-overlay is-hidden" id="lockedOverlay" role="alertdialog" aria-modal="true" aria-label="Account gesperrt">
+    <div class="locked-card">
+      <h2>Account gesperrt</h2>
+      <p id="lockedMessage" class="muted">Dein Konto wurde gesperrt. Bitte wende dich an den Administrator.</p>
+    </div>
+  </div>
 
 <script>
 (() => {
@@ -892,6 +973,9 @@
   const registerBtn = $("#registerBtn");
   const leaderboardList = $("#leaderboardList");
   const leaderboardDetails = $("#leaderboardDetails");
+  const adminToggleBtn = $("#adminToggleBtn");
+  const adminModal = $("#adminModal");
+  const adminCloseBtn = $("#adminCloseBtn");
   const adminPassInput = $("#adminPass");
   const adminLoginBtn = $("#adminLoginBtn");
   const adminRefreshBtn = $("#adminRefreshBtn");
@@ -901,6 +985,8 @@
   const adminContent = $("#adminContent");
   const adminError = $("#adminError");
   const adminUserList = $("#adminUserList");
+  const lockedOverlay = $("#lockedOverlay");
+  const lockedMessage = $("#lockedMessage");
 
   const SUITS = ["♠","♥","♦","♣"];
   const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
@@ -1089,6 +1175,25 @@
     }
   }
 
+  function setAdminModalVisibility(isVisible){
+    if(isVisible){
+      adminModal.classList.remove("is-hidden");
+      adminModal.setAttribute("aria-hidden", "false");
+    }else{
+      adminModal.classList.add("is-hidden");
+      adminModal.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function showLockedOverlay(message){
+    const text = message || "Dein Konto wurde gesperrt. Bitte wende dich an den Administrator.";
+    lockedMessage.textContent = text;
+    lockedOverlay.classList.remove("is-hidden");
+    lockedOverlay.setAttribute("aria-hidden", "false");
+    authOverlay.classList.add("is-hidden");
+    authOverlay.setAttribute("aria-hidden", "true");
+  }
+
   function renderAdminUsers(users){
     adminUserList.innerHTML = "";
     if(!users.length){
@@ -1255,6 +1360,10 @@
       await fetchLeaderboard();
       log("Tip: Setze Chips, dann Deal. Viel Glück ✨", "muted");
     }catch(err){
+      if(err.message && /gesperrt/i.test(err.message)){
+        showLockedOverlay(err.message);
+        return;
+      }
       if(!silent){
         authError.textContent = err.message || "Anmeldung fehlgeschlagen.";
       }else{
@@ -1711,6 +1820,13 @@
   authPassInput.addEventListener("keydown", (e) => {
     if(e.key === "Enter") handleAuth("login");
   });
+  adminToggleBtn.addEventListener("click", () => setAdminModalVisibility(true));
+  adminCloseBtn.addEventListener("click", () => setAdminModalVisibility(false));
+  adminModal.addEventListener("click", (event) => {
+    if(event.target === adminModal){
+      setAdminModalVisibility(false);
+    }
+  });
   adminLoginBtn.addEventListener("click", handleAdminLogin);
   adminPassInput.addEventListener("keydown", (e) => {
     if(e.key === "Enter") handleAdminLogin();
@@ -1829,6 +1945,7 @@
   (async () => {
     setAuthVisibility(true);
     setAdminVisibility(false);
+    setAdminModalVisibility(false);
     const saved = loadAuth();
     if(saved){
       authUserInput.value = saved.username;
