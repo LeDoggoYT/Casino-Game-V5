@@ -8,7 +8,7 @@ const dataDir = process.env.DATA_DIR
   ? (isAbsolute(process.env.DATA_DIR)
     ? process.env.DATA_DIR
     : join(__dirname, process.env.DATA_DIR))
-  : join(__dirname, "data");
+  : "/tmp/casino-data";
 const usersFile = join(dataDir, "users.json");
 
 const defaultState = {
@@ -43,6 +43,9 @@ async function ensureJsonFile(path, fallback) {
 }
 
 async function readUsers() {
+  if (!storageReady) {
+    await ensureDataFiles();
+  }
   if (!storageReady) return memoryUsers;
   try {
     const raw = await readFile(usersFile, "utf8");
@@ -54,6 +57,9 @@ async function readUsers() {
 }
 
 async function writeUsers(users) {
+  if (!storageReady) {
+    await ensureDataFiles();
+  }
   if (!storageReady) {
     memoryUsers = users;
     return;
