@@ -1,10 +1,14 @@
 import { createServer } from "node:http";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dataDir = join(__dirname, "data");
+const dataDir = process.env.DATA_DIR
+  ? (isAbsolute(process.env.DATA_DIR)
+    ? process.env.DATA_DIR
+    : join(__dirname, process.env.DATA_DIR))
+  : join(__dirname, "data");
 const usersFile = join(dataDir, "users.json");
 
 const defaultState = {
@@ -15,9 +19,19 @@ const defaultState = {
   audioOn: true
 };
 
+let memoryUsers = {};
+let storageReady = false;
+
 async function ensureDataFiles() {
-  await mkdir(dataDir, { recursive: true });
-  await ensureJsonFile(usersFile, {});
+  try {
+    await mkdir(dataDir, { recursive: true });
+    await ensureJsonFile(usersFile, {});
+    storageReady = true;
+    console.log(`Storage ready at ${dataDir}`);
+  } catch {
+    storageReady = false;
+    console.warn(`Storage unavailable at ${dataDir}. Falling back to in-memory storage.`);
+  }
 }
 
 async function ensureJsonFile(path, fallback) {
@@ -28,13 +42,28 @@ async function ensureJsonFile(path, fallback) {
   }
 }
 
-async function readJson(path) {
-  const raw = await readFile(path, "utf8");
-  return JSON.parse(raw || "{}");
+async function readUsers() {
+  if (!storageReady) return memoryUsers;
+  try {
+    const raw = await readFile(usersFile, "utf8");
+    return JSON.parse(raw || "{}");
+  } catch {
+    console.warn("Failed to read users file, using memory fallback.");
+    return memoryUsers;
+  }
 }
 
-async function writeJson(path, data) {
-  await writeFile(path, JSON.stringify(data, null, 2));
+async function writeUsers(users) {
+  if (!storageReady) {
+    memoryUsers = users;
+    return;
+  }
+  try {
+    await writeFile(usersFile, JSON.stringify(users, null, 2));
+  } catch {
+    console.warn("Failed to write users file, keeping data in memory.");
+    memoryUsers = users;
+  }
 }
 
 function sendJson(res, status, payload) {
@@ -53,7 +82,7 @@ function parseBody(req) {
       try {
         resolve(JSON.parse(body));
       } catch (err) {
-        reject(err);
+        reject(new Error("Ungültiges JSON im Request-Body."));
       }
     });
   });
@@ -64,7 +93,7 @@ async function handleLogin(req, res) {
   if (!username || !password) {
     return sendJson(res, 400, { error: "Benutzername und Passwort erforderlich." });
   }
-  const users = await readJson(usersFile);
+  const users = await readUsers();
   const user = users[username];
   if (!user || user.password !== password) {
     return sendJson(res, 401, { error: "Login fehlgeschlagen." });
@@ -77,7 +106,7 @@ async function handleRegister(req, res) {
   if (!username || !password) {
     return sendJson(res, 400, { error: "Benutzername und Passwort erforderlich." });
   }
-  const users = await readJson(usersFile);
+  const users = await readUsers();
   if (users[username]) {
     return sendJson(res, 409, { error: "Benutzer existiert bereits." });
   }
@@ -86,7 +115,7 @@ async function handleRegister(req, res) {
     balance: defaultState.bankroll,
     state: { ...defaultState }
   };
-  await writeJson(usersFile, users);
+  await writeUsers(users);
   return sendJson(res, 200, { ok: true, state: users[username].state });
 }
 
@@ -95,7 +124,7 @@ async function handleGetState(req, res, url) {
   if (!username) {
     return sendJson(res, 400, { error: "Benutzername erforderlich." });
   }
-  const users = await readJson(usersFile);
+  const users = await readUsers();
   const user = users[username];
   if (!user) {
     return sendJson(res, 404, { error: "Benutzer nicht gefunden." });
@@ -108,7 +137,7 @@ async function handleSaveState(req, res) {
   if (!username || !state) {
     return sendJson(res, 400, { error: "Benutzername und State erforderlich." });
   }
-  const users = await readJson(usersFile);
+  const users = await readUsers();
   if (!users[username]) {
     return sendJson(res, 404, { error: "Benutzer nicht gefunden." });
   }
@@ -117,12 +146,12 @@ async function handleSaveState(req, res) {
     balance: typeof state.bankroll === "number" ? state.bankroll : users[username].balance,
     state
   };
-  await writeJson(usersFile, users);
+  await writeUsers(users);
   return sendJson(res, 200, { ok: true });
 }
 
 async function handleLeaderboard(req, res) {
-  const users = await readJson(usersFile);
+  const users = await readUsers();
   const list = Object.entries(users).map(([username, data]) => ({
     username,
     balance: typeof data.balance === "number" ? data.balance : defaultState.bankroll,
@@ -167,8 +196,10 @@ const server = createServer(async (req, res) => {
       return await handleLeaderboard(req, res);
     }
     return await handleStatic(req, res, url);
-  } catch {
-    return sendJson(res, 500, { error: "Serverfehler." });
+  } catch (err) {
+    console.error("Serverfehler:", err);
+    const message = err instanceof Error ? err.message : "Serverfehler.";
+    return sendJson(res, 500, { error: message });
   }
 });
 
