@@ -4,12 +4,12 @@
     "balance": 2500,
     "state": {
       "bankroll": 2500,
-      "bet": 2000,
+      "bet": 0,
       "decks": 6,
       "stats": {
-        "rounds": 3,
-        "win": 1,
-        "lose": 2,
+        "rounds": 5,
+        "win": 2,
+        "lose": 3,
         "push": 0,
         "streak": 0,
         "bestStreak": 1

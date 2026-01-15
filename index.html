@@ -846,6 +846,7 @@
     const data = await res.json().catch(() => ({}));
     if(!res.ok){
       const message = data && data.error ? data.error : "Serverfehler";
+      console.error(`API Fehler ${res.status} bei ${path}:`, message);
       throw new Error(message);
     }
     return data;
@@ -1411,6 +1412,7 @@
 
   // ---------- Betting ----------
   function addBet(amt){
+    if(!state) return;
     if(inRound) return;
     if(amt <= 0) return;
     if(state.bet + amt > state.bankroll){
@@ -1423,6 +1425,7 @@
     render();
   }
   function clearBet(){
+    if(!state) return;
     if(inRound) return;
     state.bet = 0;
     saveState();
@@ -1465,6 +1468,7 @@
 
   // Keyboard shortcuts
   window.addEventListener("keydown", (e) => {
+    if(!state) return;
     const k = e.key.toLowerCase();
     if(k === " "){
       e.preventDefault();
