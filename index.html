@@ -769,6 +769,7 @@
 
   const fmt = (n) => n.toLocaleString("de-CH");
   const AUTH_STORAGE_KEY = "bj_auth_v1";
+  const STATE_BACKUP_PREFIX = "bj_state_backup_v1:";
   let authCache = null;
 
   function toast(msg){
@@ -889,13 +890,55 @@
     }
   }
 
+  function backupKey(username){
+    return `${STATE_BACKUP_PREFIX}${username}`;
+  }
+
+  function saveStateBackup(){
+    if(!currentUser || !state) return;
+    try{
+      localStorage.setItem(backupKey(currentUser), JSON.stringify({
+        state,
+        updatedAt: Date.now()
+      }));
+    }catch{
+      // ignore backup failures
+    }
+  }
+
+  function loadStateBackup(username){
+    try{
+      const raw = localStorage.getItem(backupKey(username));
+      if(!raw) return null;
+      const parsed = JSON.parse(raw);
+      if(!parsed || !parsed.state) return null;
+      return parsed;
+    }catch{
+      return null;
+    }
+  }
+
   function renderLeaderboard(users){
     leaderboardList.innerHTML = "";
-    if(!users.length){
+    let list = users;
+    if(currentUser && state){
+      const exists = list.some((u) => u.username === currentUser);
+      if(!exists){
+        list = [
+          {
+            username: currentUser,
+            balance: state.bankroll,
+            stats: state.stats
+          },
+          ...list
+        ];
+      }
+    }
+    if(!list.length){
       leaderboardList.innerHTML = "<div class=\"muted\">Keine Spieler gefunden.</div>";
       return;
     }
-    users.forEach((user, idx) => {
+    list.slice(0, 5).forEach((user, idx) => {
       const item = document.createElement("div");
       item.className = "leaderboard-item" + (idx === 0 ? " active" : "");
       item.innerHTML = `
@@ -909,7 +952,7 @@
       });
       leaderboardList.appendChild(item);
     });
-    renderLeaderboardDetails(users[0]);
+    renderLeaderboardDetails(list[0]);
   }
 
   function renderLeaderboardDetails(user){
@@ -984,10 +1027,23 @@
       currentUser = username;
       saveAuth(username, password);
       state = normalizeState(data.state);
+      const backup = loadStateBackup(username);
+      if(backup?.state){
+        const backupState = normalizeState(backup.state);
+        const looksDefault = state.stats.rounds === 0 && state.bankroll === defaultState.bankroll;
+        const backupAhead = backupState.stats.rounds >= state.stats.rounds || backupState.bankroll !== state.bankroll;
+        if(looksDefault && backupAhead){
+          state = backupState;
+        }
+      }
       setAuthVisibility(false);
       audioOn = !!state.audioOn;
       buildShoe();
       render();
+      saveStateBackup();
+      if(backup?.state){
+        saveState();
+      }
       await fetchLeaderboard();
       log("Tip: Setze Chips, dann Deal. Viel Glück ✨", "muted");
     }catch(err){
@@ -1002,6 +1058,7 @@
     if(!currentUser || !state) return;
     void apiFetch("/api/state", { username: currentUser, state });
     void fetchLeaderboard();
+    saveStateBackup();
   }
 
   function buildShoe(){
