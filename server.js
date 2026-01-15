@@ -8,7 +8,7 @@ const dataDir = process.env.DATA_DIR
   ? (isAbsolute(process.env.DATA_DIR)
     ? process.env.DATA_DIR
     : join(__dirname, process.env.DATA_DIR))
-  : "/tmp/casino-data";
+  : join(__dirname, "data");
 const usersFile = join(dataDir, "users.json");
 const adminPassword = "2011";
 
