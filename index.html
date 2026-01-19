@@ -748,6 +748,8 @@
           <div class="chip green" data-amt="100" title="+100 (4)">100<small>100</small></div>
           <div class="chip black" data-amt="500" title="+500 (5)">500<small>500</small></div>
           <button class="btn small" id="clearBetBtn" title="Bet löschen (C)">Clear</button>
+          <button class="btn small" id="resetBankrollBtn" title="Kontostand auf 2'500 CHF setzen">Reset 2'500</button>
+          <button class="btn small" id="allInBtn" title="Gesamtes Konto setzen">All-in</button>
         </div>
 
         <div class="betbox">
@@ -868,6 +870,8 @@
   const standBtn = $("#standBtn");
   const doubleBtn = $("#doubleBtn");
   const clearBetBtn = $("#clearBetBtn");
+  const resetBankrollBtn = $("#resetBankrollBtn");
+  const allInBtn = $("#allInBtn");
   const newShoeBtn = $("#newShoeBtn");
   const soundBtn = $("#soundBtn");
   const logEl = null;
@@ -1416,6 +1420,8 @@
       ch.style.opacity = inRound ? ".55" : "1";
     });
     clearBetBtn.disabled = inRound;
+    resetBankrollBtn.disabled = inRound;
+    allInBtn.disabled = inRound || state.bankroll <= 0;
 
     // stats
     statRounds.textContent = state.stats.rounds;
@@ -1705,6 +1711,32 @@
     render();
   }
 
+  function resetBankroll(){
+    if(!state) return;
+    if(inRound) return;
+    state.bankroll = 2500;
+    state.bet = 0;
+    saveState();
+    log("Bankroll manuell auf 2'500 CHF gesetzt.", "muted");
+    toast("Kontostand zurückgesetzt");
+    beep("click");
+    render();
+  }
+
+  function allIn(){
+    if(!state) return;
+    if(inRound) return;
+    if(state.bankroll <= 0){
+      toast("Kein Guthaben für All-in");
+      return;
+    }
+    state.bet = state.bankroll;
+    saveState();
+    beep("chip");
+    toast("All-in gesetzt");
+    render();
+  }
+
   // ---------- Events ----------
   loginBtn.addEventListener("click", () => handleAuth("login"));
   registerBtn.addEventListener("click", () => handleAuth("register"));
@@ -1780,6 +1812,8 @@
   standBtn.addEventListener("click", stand);
   doubleBtn.addEventListener("click", doubleDown);
   clearBetBtn.addEventListener("click", clearBet);
+  resetBankrollBtn.addEventListener("click", resetBankroll);
+  allInBtn.addEventListener("click", allIn);
 
   newShoeBtn.addEventListener("click", () => {
     if(inRound){
